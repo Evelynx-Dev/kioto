@@ -7,6 +7,10 @@ extern fn pal_net_close: (fd :i64) lib "c"
 extern fn pal_net_poll: (fd :i64, timeout_ms :i64) :i64 lib "c"
 extern fn pal_net_set_nonblock: (fd :i64, nonblock :i64) lib "c"
 extern fn pal_net_resolve: (host :str) :str lib "c"
+extern fn pal_tls_connect: (host :str, port :i64) :i64 lib "c"
+extern fn pal_tls_send: (fd :i64, data :str) lib "c"
+extern fn pal_tls_recv: (fd :i64, max_bytes :i64) :str lib "c"
+extern fn pal_tls_close: (fd :i64) lib "c"
 
 pub fn connect: (host :&str, port :&i64) :i64 {
     return pal_net_connect(*host, *port)
@@ -47,16 +51,35 @@ pub fn resolve: (host :&str) :str {
     return pal_net_resolve(*host)
 }
 
+fn is_https: (url :str) :bool {
+    return strings::startswith(url "https://")
+}
+
 pub fn http_get: (url :&str) :str {
     set u1 = *url
     set host = extract_host(u1)
     set u2 = *url
     set port = extract_port(u2) :i64 mut
-    if port < 1 { set port = 80 :i64 }
+    set u4 = *url
+    set use_tls = is_https(u4)
+    if port < 1 {
+        if use_tls { set port = 443 :i64 }
+        if !use_tls { set port = 80 :i64 }
+    }
     set u3 = *url
     set path = extract_path(u3)
 
-    set fd = pal_net_connect(host, port)
+    set fd = 0 :i64 mut
+    if use_tls {
+        set host2 = host
+        set port2 = port
+        set fd = pal_tls_connect(host2, port2)
+    }
+    if !use_tls {
+        set host3 = host
+        set port3 = port
+        set fd = pal_net_connect(host3, port3)
+    }
     if fd < 0 { return "" }
 
     set h = host
@@ -69,10 +92,24 @@ pub fn http_get: (url :&str) :str {
     set request = request + "\r\n"
 
     set req = request
-    pal_net_send(fd, req)
+    set fd_send = fd
+    if use_tls { pal_tls_send(fd_send, req) }
+    if !use_tls {
+        set fd_send2 = fd
+        set req2 = request
+        pal_net_send(fd_send2, req2)
+    }
 
-    set response = pal_net_recv(fd, 1048576 :i64)
-    pal_net_close(fd)
+    set fd_recv = fd
+    set response = "" :str mut
+    if use_tls { set response = pal_tls_recv(fd_recv, 1048576 :i64) }
+    if !use_tls {
+        set fd_recv2 = fd
+        set response = pal_net_recv(fd_recv2, 1048576 :i64)
+    }
+
+    if use_tls { pal_tls_close(fd) }
+    if !use_tls { pal_net_close(fd) }
 
     set r = response
     set split_header = strings::index_of(r "\r\n\r\n")
@@ -85,11 +122,26 @@ pub fn http_post: (url :&str, body :&str, content_type :&str) :str {
     set host = extract_host(u1)
     set u2 = *url
     set port = extract_port(u2) :i64 mut
-    if port < 1 { set port = 80 :i64 }
+    set u4 = *url
+    set use_tls = is_https(u4)
+    if port < 1 {
+        if use_tls { set port = 443 :i64 }
+        if !use_tls { set port = 80 :i64 }
+    }
     set u3 = *url
     set path = extract_path(u3)
 
-    set fd = pal_net_connect(host, port)
+    set fd = 0 :i64 mut
+    if use_tls {
+        set host2 = host
+        set port2 = port
+        set fd = pal_tls_connect(host2, port2)
+    }
+    if !use_tls {
+        set host3 = host
+        set port3 = port
+        set fd = pal_net_connect(host3, port3)
+    }
     if fd < 0 { return "" }
 
     set ct = *content_type
@@ -112,10 +164,24 @@ pub fn http_post: (url :&str, body :&str, content_type :&str) :str {
     set request = request + b2
 
     set req = request
-    pal_net_send(fd, req)
+    set fd_send = fd
+    if use_tls { pal_tls_send(fd_send, req) }
+    if !use_tls {
+        set fd_send2 = fd
+        set req2 = request
+        pal_net_send(fd_send2, req2)
+    }
 
-    set response = pal_net_recv(fd, 1048576 :i64)
-    pal_net_close(fd)
+    set fd_recv = fd
+    set response = "" :str mut
+    if use_tls { set response = pal_tls_recv(fd_recv, 1048576 :i64) }
+    if !use_tls {
+        set fd_recv2 = fd
+        set response = pal_net_recv(fd_recv2, 1048576 :i64)
+    }
+
+    if use_tls { pal_tls_close(fd) }
+    if !use_tls { pal_net_close(fd) }
 
     set r = response
     set split_header = strings::index_of(r "\r\n\r\n")
