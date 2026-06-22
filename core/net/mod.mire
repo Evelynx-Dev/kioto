@@ -12,39 +12,38 @@ extern fn pal_tls_send: (fd :i64, data :str) lib "c"
 extern fn pal_tls_recv: (fd :i64, max_bytes :i64) :str lib "c"
 extern fn pal_tls_close: (fd :i64) lib "c"
 
-pub fn connect: (host :&str, port :&i64) :i64 {
-    return pal_net_connect(*host, *port)
+pub fn connect: (host :&str, port :i64) :i64 {
+    return pal_net_connect(*host, port)
 }
 
-pub fn connect_timeout: (host :&str, port :&i64, timeout_ms :&i64) :i64 {
-    return pal_net_connect_timeout(*host, *port, *timeout_ms)
+pub fn connect_timeout: (host :&str, port :i64, timeout_ms :i64) :i64 {
+    return pal_net_connect_timeout(*host, port, timeout_ms)
 }
 
-pub fn send: (fd :&i64, data :&str) :bool {
-    set f = *fd
+pub fn send: (fd :i64, data :&str) :bool {
     set d = *data
-    pal_net_send(f, d)
+    pal_net_send(fd, d)
     return true
 }
 
-pub fn recv: (fd :&i64, max_bytes :&i64) :str {
-    return pal_net_recv(*fd, *max_bytes)
+pub fn recv: (fd :i64, max_bytes :i64) :str {
+    return pal_net_recv(fd, max_bytes)
 }
 
-pub fn recv_all: (fd :&i64) :str {
-    return pal_net_recv(*fd, 65536 :i64)
+pub fn recv_all: (fd :i64) :str {
+    return pal_net_recv(fd, 65536 :i64)
 }
 
-pub fn close: (fd :&i64) {
-    pal_net_close(*fd)
+pub fn close: (fd :i64) {
+    pal_net_close(fd)
 }
 
-pub fn poll: (fd :&i64, timeout_ms :&i64) :i64 {
-    return pal_net_poll(*fd, *timeout_ms)
+pub fn poll: (fd :i64, timeout_ms :i64) :i64 {
+    return pal_net_poll(fd, timeout_ms)
 }
 
-pub fn set_nonblock: (fd :&i64, nonblock :&i64) {
-    pal_net_set_nonblock(*fd, *nonblock)
+pub fn set_nonblock: (fd :i64, nonblock :i64) {
+    pal_net_set_nonblock(fd, nonblock)
 }
 
 pub fn resolve: (host :&str) :str {
@@ -63,54 +62,69 @@ pub fn http_get: (url :&str) :str {
     set u4 = *url
     set use_tls = is_https(u4)
     if port < 1 {
-        if use_tls { set port = 443 :i64 }
-        if !use_tls { set port = 80 :i64 }
+        set port = default_port(use_tls)
     }
     set u3 = *url
     set path = extract_path(u3)
 
-    set fd = 0 :i64 mut
-    if use_tls {
-        set host2 = host
-        set port2 = port
-        set fd = pal_tls_connect(host2, port2)
-    }
-    if !use_tls {
-        set host3 = host
-        set port3 = port
-        set fd = pal_net_connect(host3, port3)
-    }
+    set fd = http_connect(host, port, use_tls)
     if fd < 0 { return "" }
 
-    set h = host
-    set p = path
-    set request = "GET " + p + " HTTP/1.1\r\n" :str mut
     set h2 = host
-    set request = request + "Host: " + h2 + "\r\n" :str mut
+    set p2 = path
+    set request = build_get_request(p2, h2)
+
+    set fd2 = fd
+    set req = request
+    http_send(fd2, req, use_tls)
+
+    set fd3 = fd
+    set response = http_recv(fd3, use_tls)
+
+    set fd4 = fd
+    http_close(fd4, use_tls)
+
+    return extract_body(response)
+}
+
+fn http_connect: (host :&str, port :i64, tls :bool) :i64 {
+    set h = *host
+    set p = port
+    if tls { return pal_tls_connect(h, p) }
+    return pal_net_connect(h, p)
+}
+
+fn default_port: (tls :bool) :i64 {
+    if tls { return 443 :i64 }
+    return 80 :i64
+}
+
+fn build_get_request: (path :str, host :str) :str {
+    set request = "GET " + path + " HTTP/1.1\r\n" :str mut
+    set h = host
+    set request = request + "Host: " + h + "\r\n" :str mut
     set request = request + "Connection: close\r\n" :str mut
     set request = request + "User-Agent: kioto/3.0\r\n" :str mut
     set request = request + "\r\n"
+    return request
+}
 
-    set req = request
-    set fd_send = fd
-    if use_tls { pal_tls_send(fd_send, req) }
-    if !use_tls {
-        set fd_send2 = fd
-        set req2 = request
-        pal_net_send(fd_send2, req2)
-    }
+fn http_send: (fd :i64, data :str, tls :bool) {
+    if tls { pal_tls_send(fd, data) }
+    if !tls { pal_net_send(fd, data) }
+}
 
-    set fd_recv = fd
-    set response = "" :str mut
-    if use_tls { set response = pal_tls_recv(fd_recv, 1048576 :i64) }
-    if !use_tls {
-        set fd_recv2 = fd
-        set response = pal_net_recv(fd_recv2, 1048576 :i64)
-    }
+fn http_recv: (fd :i64, tls :bool) :str {
+    if tls { return pal_tls_recv(fd, 1048576 :i64) }
+    return pal_net_recv(fd, 1048576 :i64)
+}
 
-    if use_tls { pal_tls_close(fd) }
-    if !use_tls { pal_net_close(fd) }
+fn http_close: (fd :i64, tls :bool) {
+    if tls { pal_tls_close(fd) }
+    if !tls { pal_net_close(fd) }
+}
 
+fn extract_body: (response :str) :str {
     set r = response
     set split_header = strings::index_of(r "\r\n\r\n")
     if split_header < 0 { return r }
