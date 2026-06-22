@@ -20,3 +20,4 @@ load kioto::iter
 load kioto::net
 load kioto::json
 load kioto::wasm
+load kioto::ws

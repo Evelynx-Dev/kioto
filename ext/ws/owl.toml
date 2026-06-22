@@ -1,0 +1,3 @@
+[project]
+name = "ws"
+entry = "mod.mire"
