@@ -109,6 +109,22 @@ fn build_get_request: (path :str, host :str) :str {
     return request
 }
 
+fn build_post_request: (path :str, host :str, content_type :str, body :str, blen :i64) :str {
+    set request = "POST " + path + " HTTP/1.1\r\n" :str mut
+    set h = host
+    set request = request + "Host: " + h + "\r\n" :str mut
+    set ct = content_type
+    set request = request + "Content-Type: " + ct + "\r\n" :str mut
+    set len_str = strings::from_i64(blen)
+    set request = request + "Content-Length: " + len_str + "\r\n" :str mut
+    set request = request + "Connection: close\r\n" :str mut
+    set request = request + "User-Agent: kioto/3.0\r\n" :str mut
+    set request = request + "\r\n"
+    set b = body
+    set request = request + b
+    return request
+}
+
 fn http_send: (fd :i64, data :str, tls :bool) {
     if tls { pal_tls_send(fd, data) }
     if !tls { pal_net_send(fd, data) }
@@ -139,68 +155,35 @@ pub fn http_post: (url :&str, body :&str, content_type :&str) :str {
     set u4 = *url
     set use_tls = is_https(u4)
     if port < 1 {
-        if use_tls { set port = 443 :i64 }
-        if !use_tls { set port = 80 :i64 }
+        set port = default_port(use_tls)
     }
     set u3 = *url
     set path = extract_path(u3)
 
-    set fd = 0 :i64 mut
-    if use_tls {
-        set host2 = host
-        set port2 = port
-        set fd = pal_tls_connect(host2, port2)
-    }
-    if !use_tls {
-        set host3 = host
-        set port3 = port
-        set fd = pal_net_connect(host3, port3)
-    }
+    set fd = http_connect(host, port, use_tls)
     if fd < 0 { return "" }
 
     set ct = *content_type
     set b = *body
     set blen = strings::len(b)
 
-    set h = host
-    set p = path
-    set request = "POST " + p + " HTTP/1.1\r\n" :str mut
     set h2 = host
-    set request = request + "Host: " + h2 + "\r\n" :str mut
+    set p2 = path
     set ct2 = ct
-    set request = request + "Content-Type: " + ct2 + "\r\n" :str mut
-    set len_str = strings::from_i64(blen)
-    set request = request + "Content-Length: " + len_str + "\r\n" :str mut
-    set request = request + "Connection: close\r\n" :str mut
-    set request = request + "User-Agent: kioto/3.0\r\n" :str mut
-    set request = request + "\r\n"
     set b2 = b
-    set request = request + b2
+    set request = build_post_request(p2, h2, ct2, b2, blen)
 
+    set fd2 = fd
     set req = request
-    set fd_send = fd
-    if use_tls { pal_tls_send(fd_send, req) }
-    if !use_tls {
-        set fd_send2 = fd
-        set req2 = request
-        pal_net_send(fd_send2, req2)
-    }
+    http_send(fd2, req, use_tls)
 
-    set fd_recv = fd
-    set response = "" :str mut
-    if use_tls { set response = pal_tls_recv(fd_recv, 1048576 :i64) }
-    if !use_tls {
-        set fd_recv2 = fd
-        set response = pal_net_recv(fd_recv2, 1048576 :i64)
-    }
+    set fd3 = fd
+    set response = http_recv(fd3, use_tls)
 
-    if use_tls { pal_tls_close(fd) }
-    if !use_tls { pal_net_close(fd) }
+    set fd4 = fd
+    http_close(fd4, use_tls)
 
-    set r = response
-    set split_header = strings::index_of(r "\r\n\r\n")
-    if split_header < 0 { return r }
-    return strings::substr(r split_header + 4 strings::len(r))
+    return extract_body(response)
 }
 
 fn extract_host: (url :str) :str {
