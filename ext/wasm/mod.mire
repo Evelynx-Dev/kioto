@@ -1,0 +1,75 @@
+module wasm
+extern fn pal_wasm_eval: (js :str) :str lib "c"
+extern fn pal_wasm_get_element: (id :str) lib "c"
+extern fn pal_wasm_set_inner_html: (id :str, html :str) lib "c"
+extern fn pal_wasm_add_event_listener: (id :str, event :str, handler :str) lib "c"
+extern fn pal_wasm_localstorage_get: (key :str) :str lib "c"
+extern fn pal_wasm_localstorage_set: (key :str, value :str) lib "c"
+extern fn pal_wasm_fetch: (url :str, method :str, body :str) :str lib "c"
+extern fn pal_wasm_create_element: (tag :str) lib "c"
+extern fn pal_wasm_append_child: (parent_id :str, child_id :str) lib "c"
+extern fn pal_wasm_set_attribute: (id :str, attr :str, value :str) lib "c"
+extern fn pal_wasm_set_style: (id :str, prop :str, value :str) lib "c"
+extern fn pal_wasm_remove_element: (id :str) lib "c"
+extern fn pal_wasm_alert: (msg :str) lib "c"
+extern fn pal_wasm_console_log: (msg :str) lib "c"
+
+pub fn eval: (js :&str) :str {
+    return pal_wasm_eval(*js)
+}
+
+pub fn get_element_by_id: (id :&str) {
+    pal_wasm_get_element(*id)
+}
+
+pub fn set_inner_html: (id :&str, html :&str) {
+    pal_wasm_set_inner_html(*id, *html)
+}
+
+pub fn add_event_listener: (id :&str, event :&str, handler :&str) {
+    pal_wasm_add_event_listener(*id, *event, *handler)
+}
+
+pub fn local_storage_get: (key :&str) :str {
+    return pal_wasm_localstorage_get(*key)
+}
+
+pub fn local_storage_set: (key :&str, value :&str) {
+    pal_wasm_localstorage_set(*key, *value)
+}
+
+pub fn fetch: (url :&str, method :&str, body :&str) :str {
+    return pal_wasm_fetch(*url, *method, *body)
+}
+
+pub fn fetch_get: (url :&str) :str {
+    return pal_wasm_fetch(*url, "GET", "")
+}
+
+pub fn create_element: (tag :&str) {
+    pal_wasm_create_element(*tag)
+}
+
+pub fn append_child: (parent_id :&str, child_id :&str) {
+    pal_wasm_append_child(*parent_id, *child_id)
+}
+
+pub fn set_attribute: (id :&str, attr :&str, value :&str) {
+    pal_wasm_set_attribute(*id, *attr, *value)
+}
+
+pub fn set_style: (id :&str, prop :&str, value :&str) {
+    pal_wasm_set_style(*id, *prop, *value)
+}
+
+pub fn remove_element: (id :&str) {
+    pal_wasm_remove_element(*id)
+}
+
+pub fn alert: (msg :&str) {
+    pal_wasm_alert(*msg)
+}
+
+pub fn console_log: (msg :&str) {
+    pal_wasm_console_log(*msg)
+}
