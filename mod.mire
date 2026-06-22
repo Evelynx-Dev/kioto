@@ -17,4 +17,5 @@ load kioto::maybe
 load kioto::result
 load kioto::tuple
 load kioto::iter
+load kioto::net
 load kioto::json
