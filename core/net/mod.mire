@@ -1,4 +1,17 @@
+# net: TCP + HTTP/HTTPS client
+#
+# Provides raw TCP socket operations and high-level HTTP(S) request helpers.
+# HTTP and HTTPS are auto-detected from the URL scheme.
+# HTTPS uses OpenSSL TLS via pal_tls_* PAL functions.
+#
+# Usage:
+#   load kioto::net
+#   set body = net::http_get("https://httpbin.org/get")
+#   set res = net::http_post(url, body, "application/json")
 module net
+
+# ── Raw TCP ─────────────────────────────────────────────────────
+
 extern fn pal_net_connect: (host :str, port :i64) :i64 lib "c"
 extern fn pal_net_connect_timeout: (host :str, port :i64, timeout_ms :i64) :i64 lib "c"
 extern fn pal_net_send: (fd :i64, data :str) lib "c"
@@ -7,45 +20,57 @@ extern fn pal_net_close: (fd :i64) lib "c"
 extern fn pal_net_poll: (fd :i64, timeout_ms :i64) :i64 lib "c"
 extern fn pal_net_set_nonblock: (fd :i64, nonblock :i64) lib "c"
 extern fn pal_net_resolve: (host :str) :str lib "c"
+
+# ── TLS (OpenSSL) ───────────────────────────────────────────────
+
 extern fn pal_tls_connect: (host :str, port :i64) :i64 lib "c"
 extern fn pal_tls_send: (fd :i64, data :str) lib "c"
 extern fn pal_tls_recv: (fd :i64, max_bytes :i64) :str lib "c"
 extern fn pal_tls_close: (fd :i64) lib "c"
 
+# TCP connect to host:port. Returns fd or -1 on error.
 pub fn connect: (host :&str, port :i64) :i64 {
     return pal_net_connect(*host, port)
 }
 
+# TCP connect with custom timeout (milliseconds).
 pub fn connect_timeout: (host :&str, port :i64, timeout_ms :i64) :i64 {
     return pal_net_connect_timeout(*host, port, timeout_ms)
 }
 
+# Send raw data on a TCP socket.
 pub fn send: (fd :i64, data :&str) :bool {
     set d = *data
     pal_net_send(fd, d)
     return true
 }
 
+# Receive up to max_bytes from a TCP socket.
 pub fn recv: (fd :i64, max_bytes :i64) :str {
     return pal_net_recv(fd, max_bytes)
 }
 
+# Receive up to 64 KiB from a TCP socket.
 pub fn recv_all: (fd :i64) :str {
     return pal_net_recv(fd, 65536 :i64)
 }
 
+# Close a TCP socket.
 pub fn close: (fd :i64) {
     pal_net_close(fd)
 }
 
+# Poll a socket for readability. Returns >0 if readable.
 pub fn poll: (fd :i64, timeout_ms :i64) :i64 {
     return pal_net_poll(fd, timeout_ms)
 }
 
+# Set socket non-blocking (nonblock != 0) or blocking (nonblock == 0).
 pub fn set_nonblock: (fd :i64, nonblock :i64) {
     pal_net_set_nonblock(fd, nonblock)
 }
 
+# Resolve a hostname to an IPv4 address string.
 pub fn resolve: (host :&str) :str {
     return pal_net_resolve(*host)
 }
@@ -54,6 +79,8 @@ fn is_https: (url :str) :bool {
     return strings::startswith(url "https://")
 }
 
+# HTTP/HTTPS GET request. Auto-detects https:// for TLS.
+# Returns the response body. Returns "" on connection error.
 pub fn http_get: (url :&str) :str {
     set u1 = *url
     set host = extract_host(u1)
@@ -147,6 +174,8 @@ fn extract_body: (response :str) :str {
     return strings::substr(r split_header + 4 strings::len(r))
 }
 
+# HTTP/HTTPS POST request with body and Content-Type header.
+# Auto-detects https:// for TLS. Returns "" on connection error.
 pub fn http_post: (url :&str, body :&str, content_type :&str) :str {
     set u1 = *url
     set host = extract_host(u1)
