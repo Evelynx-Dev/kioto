@@ -1,5 +1,20 @@
 # Kioto Changelog
 
+## [3.11.11] — 2026-06-24
+
+### Changed
+- **Modularized `net`**: `http_get` → `net::http::get`, `http_post` → `net::http::post`,
+  `connect_timeout` → `net::connect::timeout`, `recv_all` → `net::recv::all`,
+  `set_nonblock` → `net::socket::nonblock`. All underscore-separated function
+  names are now namespace-separated with `::`.
+- **Modularized `ws`**: `send_text` → `ws::send::text`, `recv_all` → `ws::recv::all`.
+- **Modularized `async`**: `is_done` → `async::task::done`, `is_error` → `async::task::error`.
+- `extern fn` declarations are now **private by default** (not exported).
+  Use `pub extern fn` to export.
+
+### Removed
+- **WASM module** (`ext/wasm/`): removed browser bridge.
+
 ## [3.11.10] — 2026-06-24
 
 ### Added

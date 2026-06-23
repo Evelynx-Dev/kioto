@@ -1,6 +1,6 @@
 # Kioto — Mire Standard Library
 
-**Version:** 3.11.10 — **Language:** Mire (Avenys) — **License:** GPL v3.0
+**Version:** 3.11.11 — **Language:** Mire (Avenys) — **License:** GPL v3.0
 
 Kioto is the standard library for the Mire programming language. It provides
 core data structures, operating system abstractions, networking, and browser
@@ -21,7 +21,7 @@ User code (.mire)
           │
           ▼
 ┌─────────────────────┐
-│  Operating System    │  Linux (POSIX) | WASM (WASI + Emscripten)
+│  Operating System    │  Linux (POSIX)
 └─────────────────────┘
 ```
 
@@ -34,8 +34,11 @@ load kioto
 
 fn main: () {
     # HTTP GET
-    set res = net::http_get("https://httpbin.org/get")
+    set res = net::http::get("https://httpbin.org/get")
     use dasu(res)
+
+    # HTTP POST
+    set r2 = net::http::post("https://httpbin.org/post", "hello=world", "application/x-www-form-urlencoded")
 
     # File I/O
     fs::write("log.txt", res)
@@ -69,7 +72,7 @@ owl run
 | `fs` | `core/fs` | 17 | read, write, copy, move, mkdir, list, walk |
 | `env` | `core/env` | 6 | get, set, cwd, chdir, args, all |
 | `proc` | `core/proc` | 18 | run, spawn, capture, shell, wait, kill |
-| `async` | `core/async` | 9 | spawn, join, ready, failed, is_done |
+| `async` | `core/async` | 9 | spawn, join, ready, failed, task::done |
 | `mem` | `core/mem` | 8 | used, total, free, percent, process, format |
 | `cpu` | `core/cpu` | 11 | time_ms, count, freq, cycles, loadavg |
 | `gpu` | `core/gpu` | 2 | available, snapshot |
@@ -82,7 +85,6 @@ owl run
 | Module | Path | Functions | Description |
 |--------|------|:---------:|-------------|
 | `ws` | `ext/ws` | 5 | WebSocket ws:// and secure wss:// |
-| `wasm` | `ext/wasm` | 15 | Browser DOM + JS bridge (WASM targets) |
 | `json` | `ext/json` | 4 | get, get_number, get_bool, has |
 | `types` | `ext/types` | 5 | is_int, is_str, is_bool, type_name |
 | `maybe` | `ext/maybe` | 8 | Option pattern: Some/None, map, bind |
@@ -255,8 +257,8 @@ Background tasks and async primitives.
 |----------|-----------|-------------|
 | `ready` | `(value :str) :map[str str]` | Create resolved task |
 | `failed` | `(message :str) :map[str str]` | Create failed task |
-| `is_done` | `(task :map[str str]) :bool` | Check if task completed |
-| `is_error` | `(task :map[str str]) :bool` | Check if task failed |
+| `task::done` | `(task :map[str str]) :bool` | Check if task completed |
+| `task::error` | `(task :map[str str]) :bool` | Check if task failed |
 | `value` | `(task :map[str str], fallback :str) :str` | Extract task value |
 | `error` | `(task :map[str str]) :str` | Extract error message |
 | `spawn` | `(cmd :str) :i64` | Spawn background process, return PID |
@@ -397,16 +399,16 @@ TCP sockets and HTTP/HTTPS client. See full documentation in the module source.
 | Function | Signature | Description |
 |----------|-----------|-------------|
 | `connect` | `(host :&str, port :i64) :i64` | TCP connect, returns fd or -1 |
-| `connect_timeout` | `(host :&str, port :i64, timeout_ms :i64) :i64` | TCP connect with timeout |
+| `connect::timeout` | `(host :&str, port :i64, timeout_ms :i64) :i64` | TCP connect with timeout |
 | `send` | `(fd :i64, data :&str) :bool` | Send raw data on TCP socket |
 | `recv` | `(fd :i64, max_bytes :i64) :str` | Receive up to max_bytes |
-| `recv_all` | `(fd :i64) :str` | Receive up to 64 KiB |
+| `recv::all` | `(fd :i64) :str` | Receive up to 64 KiB |
 | `close` | `(fd :i64)` | Close TCP/TLS socket |
 | `poll` | `(fd :i64, timeout_ms :i64) :i64` | Poll for readability |
-| `set_nonblock` | `(fd :i64, nonblock :i64)` | Non-blocking (1) or blocking (0) |
+| `socket::nonblock` | `(fd :i64, nonblock :i64)` | Non-blocking (1) or blocking (0) |
 | `resolve` | `(host :&str) :str` | DNS-resolve hostname to IPv4 |
-| `http_get` | `(url :&str) :str` | HTTP/HTTPS GET, returns body |
-| `http_post` | `(url :&str, body :&str, content_type :&str) :str` | HTTP/HTTPS POST |
+| `http::get` | `(url :&str) :str` | HTTP/HTTPS GET, returns body |
+| `http::post` | `(url :&str, body :&str, content_type :&str) :str` | HTTP/HTTPS POST |
 
 Usage:
 
@@ -415,13 +417,13 @@ load kioto::net
 
 fn main: () {
     # HTTP (plain)
-    set r1 = net::http_get("http://httpbin.org/get")
+    set r1 = net::http::get("http://httpbin.org/get")
 
     # HTTPS (auto-detected, uses OpenSSL TLS)
-    set r2 = net::http_get("https://httpbin.org/get")
+    set r2 = net::http::get("https://httpbin.org/get")
 
     # POST with JSON
-    set r3 = net::http_post(
+    set r3 = net::http::post(
         "https://httpbin.org/post",
         "{\"key\": \"value\"}",
         "application/json"
@@ -437,9 +439,9 @@ WebSocket client (RFC 6455). Auto-detects `ws://` vs `wss://` scheme.
 | Function | Signature | Description |
 |----------|-----------|-------------|
 | `connect` | `(url :&str) :i64` | Connect to ws:// or wss://, returns fd |
-| `send_text` | `(fd :i64, message :&str)` | Send masked text frame (opcode 0x1) |
+| `send::text` | `(fd :i64, message :&str)` | Send masked text frame (opcode 0x1) |
 | `recv` | `(fd :i64, max_bytes :i64) :str` | Receive one text frame |
-| `recv_all` | `(fd :i64) :str` | Receive up to 64 KiB |
+| `recv::all` | `(fd :i64) :str` | Receive up to 64 KiB |
 | `close` | `(fd :i64)` | Send close frame (0x8) and shutdown |
 
 Usage:
@@ -453,34 +455,12 @@ fn main: () {
         use dasu("Connection failed")
         return
     }
-    ws::send_text(fd, "ping")
-    set reply = ws::recv_all(fd)
+    ws::send::text(fd, "ping")
+    set reply = ws::recv::all(fd)
     use dasu("Received: " + reply)
     ws::close(fd)
 }
 ```
-
-### wasm — `load kioto::wasm`
-
-Browser DOM and JavaScript interop. No-ops on native (non-WASM) targets.
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `eval` | `(js :&str) :str` | Execute JS, return result |
-| `get_element_by_id` | `(id :&str)` | Select DOM element |
-| `set_inner_html` | `(id :&str, html :&str)` | Set element.innerHTML |
-| `add_event_listener` | `(id :&str, event :&str, handler :&str)` | Register DOM event |
-| `local_storage_get` | `(key :&str) :str` | Read localStorage |
-| `local_storage_set` | `(key :&str, value :&str)` | Write localStorage |
-| `fetch` | `(url :&str, method :&str, body :&str) :str` | Browser fetch() API |
-| `fetch_get` | `(url :&str) :str` | fetch(url, "GET", "") |
-| `create_element` | `(tag :&str)` | Create DOM element |
-| `append_child` | `(parent_id :&str, child_id :&str)` | Append child to parent |
-| `set_attribute` | `(id :&str, attr :&str, value :&str)` | Set HTML attribute |
-| `set_style` | `(id :&str, prop :&str, value :&str)` | Set CSS style |
-| `remove_element` | `(id :&str)` | Remove from DOM |
-| `alert` | `(msg :&str)` | window.alert() |
-| `console_log` | `(msg :&str)` | console.log() |
 
 ### json — `load kioto::json`
 
@@ -562,18 +542,22 @@ Basic iterator combinators over lists.
 ## Importing
 
 ```mire
-# Load the entire standard library
+# Load the entire standard library (all modules available with prefixes)
 load kioto
 
-# Load specific modules
+# Load specific modules only
 load kioto::net
 load kioto::ws
 
-# Use individual functions (no prefix needed)
-use kioto::net::http_get
-use kioto::ws::connect as ws_connect
-use kioto::strings::from_i64
+# Then call functions with module prefix
+set r = net::http::get("https://example.com")
+set fd = ws::connect("ws://127.0.0.1:9877/")
+
+# use calls a function as a statement (discards return value):
+use dasu("hello")     # call dasu (print)
+use proc::exit(1)     # call exit
 ```
+Note: `use` is always an expression call, `load` always imports a module. Use `load` to import, `use` to execute for side effects.
 
 ---
 

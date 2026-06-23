@@ -4,72 +4,20 @@
 # Scheme and port are auto-detected from the URL.
 # Frames are automatically masked per RFC 6455 section 5.3.
 #
+# Submodules:
+#   ws::send::text  — send a text frame
+#   ws::recv::all   — receive up to 64 KiB
+#
 # Usage:
 #   load kioto::ws
 #   set fd = ws::connect("wss://echo.websocket.org/")
-#   ws::send_text(fd, "ping")
-#   set msg = ws::recv_all(fd)
+#   ws::send::text(fd, "ping")
+#   set msg = ws::recv::all(fd)
 #   ws::close(fd)
 module ws
-
-# ── Plain WebSocket ─────────────────────────────────────────────
-
-extern fn pal_ws_connect: (host :str, port :i64, path :str) :i64 lib "c"
-extern fn pal_ws_send_text: (fd :i64, data :str) lib "c"
-extern fn pal_ws_recv: (fd :i64, max_bytes :i64) :str lib "c"
-extern fn pal_ws_close: (fd :i64) lib "c"
-
-# ── Secure WebSocket (TLS) ──────────────────────────────────────
-
-extern fn pal_wss_connect: (host :str, port :i64, path :str) :i64 lib "c"
-extern fn pal_wss_send_text: (fd :i64, data :str) lib "c"
-extern fn pal_wss_recv: (fd :i64, max_bytes :i64) :str lib "c"
-extern fn pal_wss_close: (fd :i64) lib "c"
-
-# Connect to a WebSocket endpoint. Supports ws:// and wss://.
-# Returns fd (>= 0) on success, -1 on error.
-# Default ports: 80 (ws), 443 (wss). Custom ports: ws://host:9877/path
-pub fn connect: (url :&str) :i64 {
-    set u1 = *url
-    set host = extract_ws_host(u1)
-    set u2 = *url
-    set port = extract_ws_port(u2) :i64 mut
-    set u3 = *url
-    set use_tls = strings::startswith(u3 "wss://")
-    if port < 1 {
-        if use_tls { set port = 443 :i64 }
-        if !use_tls { set port = 80 :i64 }
-    }
-    set u4 = *url
-    set path = extract_ws_path(u4)
-
-    set h = host
-    set p = port
-    set pt = path
-    if use_tls { return pal_wss_connect(h, p, pt) }
-    return pal_ws_connect(h, p, pt)
-}
-
-# Send a text frame (opcode 0x1). Automatically masked.
-pub fn send_text: (fd :i64, message :&str) {
-    set m = *message
-    pal_ws_send_text(fd, m)
-}
-
-# Receive one text frame. Returns "" on close frame or error.
-pub fn recv: (fd :i64, max_bytes :i64) :str {
-    return pal_ws_recv(fd, max_bytes)
-}
-
-# Receive one text frame up to 64 KiB.
-pub fn recv_all: (fd :i64) :str {
-    return pal_ws_recv(fd, 65536 :i64)
-}
-
-# Send close frame (opcode 0x8) and close the connection.
-pub fn close: (fd :i64) {
-    pal_ws_close(fd)
-}
+load kioto::ws::_pal
+load kioto::ws::send
+load kioto::ws::recv
 
 fn extract_ws_host: (url :str) :str {
     set u = url :str mut
@@ -110,4 +58,38 @@ fn extract_ws_path: (url :str) :str {
     set slash = strings::index_of(u "/")
     if slash < 0 { return "/" }
     return strings::substr(u slash strings::len(u))
+}
+
+# Connect to a WebSocket endpoint. Supports ws:// and wss://.
+# Returns fd (>= 0) on success, -1 on error.
+# Default ports: 80 (ws), 443 (wss). Custom ports: ws://host:9877/path
+pub fn connect: (url :&str) :i64 {
+    set u1 = *url
+    set host = extract_ws_host(u1)
+    set u2 = *url
+    set port = extract_ws_port(u2) :i64 mut
+    set u3 = *url
+    set use_tls = strings::startswith(u3 "wss://")
+    if port < 1 {
+        if use_tls { set port = 443 :i64 }
+        if !use_tls { set port = 80 :i64 }
+    }
+    set u4 = *url
+    set path = extract_ws_path(u4)
+
+    set h = host
+    set p = port
+    set pt = path
+    if use_tls { return pal_wss_connect(h, p, pt) }
+    return pal_ws_connect(h, p, pt)
+}
+
+# Receive one text frame. Returns "" on close frame or error.
+pub fn recv: (fd :i64, max_bytes :i64) :str {
+    return pal_ws_recv(fd, max_bytes)
+}
+
+# Send close frame (opcode 0x8) and close the connection.
+pub fn close: (fd :i64) {
+    pal_ws_close(fd)
 }
